@@ -1,16 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import Link from "next/link";
+import { register, getSocialAuthUrl } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-async function getCsrfToken() {
-  const res = await fetch(`${API_BASE}/api/v1/authentication/csrfToken/`, {
-    credentials: "include",
-  });
-  const data = await res.json();
-  return data.csrfToken;
-}
 
 const steps = ["Account", "Profile", "Done"];
 
@@ -62,7 +54,7 @@ export default function SignUpPage() {
     }
     setStep(1);
   };
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validateStep1();
@@ -70,61 +62,51 @@ export default function SignUpPage() {
 
     setLoading(true);
     setErrors({});
-    try {
-      const csrfToken = await getCsrfToken();
 
+    try {
       const payload = {
-        email: form.email,
-        password: form.password,
+        email:      form.email,
+        password:   form.password,
         first_name: form.first_name,
-        last_name: form.last_name,
-        username: form.username,
+        last_name:  form.last_name,
+        username:   form.username,
       };
 
-      const res = await fetch(`${API_BASE}/api/v1/authentication/register/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrfToken,
-        },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
+      await register(payload);
 
-      const data = await res.json();
+      setDone(true);
+      setStep(2);
+    } catch (err) {
+      const res = err?.response?.data;
 
-      if (!res.ok) {
-        // Parse Django field errors
+      if (res) {
         const fieldErrors = {};
         let general = "";
-        for (const [key, val] of Object.entries(data)) {
-          if (["email","password","username","first_name","last_name"].includes(key)) {
+
+        for (const [key, val] of Object.entries(res)) {
+          if (["email", "password", "username", "first_name", "last_name"].includes(key)) {
             fieldErrors[key] = Array.isArray(val) ? val[0] : val;
           } else {
-            general = Array.isArray(val) ? val[0] : val;
+            general = Array.isArray(val) ? val[0] : (val?.detail || val);
           }
         }
+
         if (Object.keys(fieldErrors).length) {
           setErrors(fieldErrors);
-          // Go back to step 0 if email/password errors
           if (fieldErrors.email || fieldErrors.password) setStep(0);
         } else {
           setErrors({ general: general || "Registration failed. Please try again." });
         }
-        return;
+      } else {
+        setErrors({ general: "Network error. Please try again." });
       }
-
-      setDone(true);
-      setStep(2);
-    } catch {
-      setErrors({ general: "Network error. Please try again." });
     } finally {
       setLoading(false);
     }
   };
 
   const handleSocialLogin = (provider) => {
-    window.location.href = `${API_BASE}/api/auth/social/begin/${provider}/`;
+    window.location.href = getSocialAuthUrl(provider);
   };
 
   const strengthScore = () => {
@@ -190,7 +172,7 @@ export default function SignUpPage() {
         </div>
 
         <p className="text-emerald-200/40 text-xs z-10">
-          © {new Date().getFullYear()} Python 8ja · Made in Nigeria 🇳🇬
+          © {new Date().getFullYear()} Python 9ja · Made in Nigeria 🇳🇬
         </p>
       </div>
 
@@ -224,17 +206,35 @@ export default function SignUpPage() {
               <div className="text-6xl mb-4">🎉</div>
               <h2 className="font-display text-3xl text-gray-900 mb-2">You're in!</h2>
               <p className="text-gray-500 text-sm mb-2">
-                Welcome to Python 8ja, <strong>{form.first_name}</strong>!
+                Welcome to Python 9ja, <strong>{form.first_name}</strong>!
               </p>
-              <p className="text-gray-400 text-sm mb-8">
-                We sent a verification email to <strong>{form.email}</strong>. Please verify before signing in.
+              <p className="text-gray-400 text-sm mb-6">
+                We sent a verification email to <strong>{form.email}</strong>.
               </p>
-              <Link
-                href="/account/signin"
-                className="btn-green inline-block px-8 py-3.5 rounded-xl text-white font-semibold text-sm"
-              >
-                Go to Sign In →
-              </Link>
+
+              {/* OTP setup notice */}
+              <div className="mb-8 px-4 py-4 rounded-xl bg-emerald-50 border border-emerald-200 text-left">
+                <p className="text-emerald-800 font-semibold text-sm mb-1">🔐 Set up OTP before signing in</p>
+                <p className="text-emerald-700 text-xs leading-relaxed">
+                  Python 9ja uses OTP-based login for extra security. You'll need to set up a
+                  TOTP authenticator app (like Google Authenticator or Authy) to sign in.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Link
+                  href="/account/setup-2fa"
+                  className="btn-green inline-block px-8 py-3.5 rounded-xl text-white font-semibold text-sm"
+                >
+                  Set Up OTP Now 🔐
+                </Link>
+                <Link
+                  href="/account/signin"
+                  className="text-sm text-gray-400 hover:text-emerald-600 transition-colors"
+                >
+                  Skip for now → Go to Sign In
+                </Link>
+              </div>
             </div>
           ) : (
             <>
