@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const backend_host = "http://localhost:8000/api/v1"
-const pro_backend_host = "https://pynigeria-backend.onrender.com/api/v1/"
+const pro_backend_host = "https://pynigeria-backend.onrender.com/api/v1"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || pro_backend_host ;
 
 const api = axios.create({
