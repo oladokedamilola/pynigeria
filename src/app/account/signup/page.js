@@ -85,7 +85,7 @@ export default function SignUpPage() {
       setDone(true);
       setStep(2);
     } catch (err) {
-      setDebug(JSON.stringify(result, null, 2))
+      setDebug(err.message || err.toString())
       const res = err?.response?.data;
       if (res) {
         const fieldErrors = {};
