@@ -179,9 +179,10 @@ export default function SignUpPage() {
               Python<span className="text-emerald-600">9ja</span>
             </span>
           </Link>
-           <pre className="bg-black text-green-400 p-4 rounded-xl text-xs overflow-x-auto whitespace-pre-wrap break-words mt-4 border border-green-800">
+          {debug &&
+           <pre className="bg-black text-green-400 p-4 rounded-xl text-xs overflow-x-auto whitespace-pre-wrap break-words mt-4 border border-green-800 py-2">
   {debug}
-</pre>
+</pre> }
           {/* Step indicator */}
           <div className="flex items-center gap-2 mb-8">
             {steps.map((s, i) => (
