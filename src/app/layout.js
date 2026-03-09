@@ -257,9 +257,11 @@ function Footer() {
         <div className="grid md:grid-cols-4 gap-8 mb-8">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 green-gradient rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                Py
-              </div>
+               <img
+              src="/logo.svg"
+              alt="Python 9ja"
+              className="w-8 h-8 rounded-lg"
+            />
               <span className="font-display font-bold text-lg text-white">
                 Python<span className="text-green-400">9ja</span>
               </span>

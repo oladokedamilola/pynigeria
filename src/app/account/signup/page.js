@@ -172,7 +172,7 @@ export default function SignUpPage() {
 
           {/* Mobile logo */}
           <Link href="/" className="flex items-center gap-2 mb-8 lg:hidden">
-            <img src="/logo.svg" className="w-8 h-8 green-gradient rounded-lg" alt="Python 9ja" />
+            <img src="/logo.svg" className="w-8 h-8 rounded-lg" alt="Python 9ja" />
             <span className="font-display text-lg text-gray-900">
               Python<span className="text-emerald-600">9ja</span>
             </span>

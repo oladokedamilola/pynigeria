@@ -185,7 +185,7 @@ export default function Nav() {
 
           {/* ── Mobile hamburger ── */}
           <button
-            className={`md:hidden flex flex-col justify-center gap-1.5 w-8 h-8 ${solidBg ? "text-gray-700" : "text-white"}`}
+            className={`md:hidden flex flex-col justify-center gap-1.5 w-8 h-8 ${solidBg ? "text-gray-700" : "text-black"}`}
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label="Toggle menu"
           >

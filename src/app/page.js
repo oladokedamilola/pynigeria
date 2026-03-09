@@ -53,7 +53,7 @@ export default function Home() {
     <div className="font-sans text-gray-900 bg-white overflow-x-hidden">
 
       {/* ─── HERO ─── */}
-      <section className="min-h-screen hero-pattern flex items-center pt-16">
+      <section className="min-h-screen hero-pattern flex items-center pt-16 sm:pt-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 w-full">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             {/* Left */}
@@ -62,9 +62,8 @@ export default function Home() {
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                 Nigeria's #1 Python Community
               </div>
-              <h2 className="font-display text-3xl md:text-5xl  leading-tight text-gray-900 mb-4"> Welcome to
-                 <br />
-                <span className="shine text-5xl md:text-6xl bold">Python 9ja</span>
+              <h2 className="font-display text-5xl md:text-5xl  leading-tight text-gray-900 mb-4">Python 
+                <span className="shine text-6xl md:text-6xl bold">9ja</span>
               </h2>
               <p className="text-gray-500 text-lg leading-relaxed mb-8 max-w-md">
                 A space for Python enthusiasts across Nigeria to share knowledge, tackle real-world projects together, and grow in tech 
@@ -94,8 +93,8 @@ export default function Home() {
             {/* Right – Hero graphic placeholder / logo */}
             <div className="flex justify-center fade-in" style={{ animationDelay: "0.2s" }}>
               <div className="relative">
-                <div className="w-72 h-72 md:w-96 md:h-96 green-gradient rounded-3xl flex items-center justify-center shadow-2xl">
-                  <img src="/hero.png" alt="Python 8ja hero" className="w-full h-full object-cover rounded-3xl opacity-90" onError={(e) => { e.target.style.display = "none"; }} />
+                <div className="w-72 h-72 md:w-96 md:h-96 green-gradient rounded-3xl flex items-center justify-center shadow-1xl">
+                  <img src="/hero.jpg" alt="Python 8ja hero" className="w-full h-full object-cover rounded-3xl opacity-90" onError={(e) => { e.target.style.display = "none"; }} />
                   <span className="hidden absolute text-8xl select-none">🐍</span>
                 </div>
                 {/* floating badges */}
