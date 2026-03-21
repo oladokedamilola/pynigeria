@@ -1,3 +1,4 @@
+#publish existing issues
 name: CSV to Issues v1 (Idempotent)
 on:
   workflow_dispatch:
