@@ -1,49 +1,103 @@
-name: CSV to Issues (Idempotent)
-
+name: CSV to Issues v1 (Idempotent)
 on:
   push:
     paths:
       - '.github/data/**/*.csv'
-
 jobs:
   create-issues:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install GitHub CLI
-        run: sudo apt-get install gh -y
-
       - name: Process CSV files
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          for file in .github/data/*.csv; do
-            echo "Processing $file"
+          python3 << 'EOF'
+          import csv
+          import subprocess
+          import glob
+          import os
+          import json
 
-            tail -n +2 "$file" | while IFS=, read -r id title body labels milestone
-            do
-              echo "Checking $id"
+          repo = os.environ["REPO"]
 
-              # Check if issue already exists (by ID in title)
-              existing=$(gh issue list \
-                --search "$id in:title" \
-                --json title \
-                -q '.[].title')
+          def gh(*args):
+              result = subprocess.run(["gh"] + list(args), capture_output=True, text=True)
+              if result.returncode != 0:
+                  raise RuntimeError(f"gh {' '.join(args)} failed:\n{result.stderr}")
+              return result.stdout.strip()
 
-              if [[ "$existing" == *"$id"* ]]; then
-                echo "Skipping existing issue: $id"
-              else
-                echo "Creating issue: $id"
+          def gh_api(path, method="GET", fields=None):
+              args = ["api", f"repos/{repo}/{path}"]
+              if method != "GET":
+                  args += ["--method", method]
+              if fields:
+                  for k, v in fields.items():
+                      args += ["-f", f"{k}={v}"]
+              args += ["-q", "."]
+              result = subprocess.run(["gh"] + args, capture_output=True, text=True)
+              if result.returncode != 0:
+                  raise RuntimeError(f"API {method} {path} failed:\n{result.stderr}")
+              return json.loads(result.stdout)
 
-                gh issue create \
-                  --title "$id $title" \
-                  --body "$body" \
-                  --label "$(echo $labels | tr ';' ',')" \
-                  --milestone "$milestone"
-              fi
+          def ensure_label(name):
+              existing = gh("label", "list", "--json", "name", "-q", f'.[] | select(.name=="{name}") | .name')
+              if not existing:
+                  print(f"  Creating label: {name}")
+                  gh("label", "create", name, "--color", "f29513")
 
-            done
-          done
+          def ensure_milestone(title):
+              milestones = gh_api("milestones")
+              for m in milestones:
+                  if m["title"] == title:
+                      return str(m["number"])
+              print(f"  Creating milestone: {title}")
+              created = gh_api("milestones", method="POST", fields={"title": title})
+              return str(created["number"])
+
+          def issue_exists(issue_id):
+              out = gh("issue", "list", "--search", f"{issue_id} in:title", "--json", "title", "-q", ".[].title")
+              return issue_id in out
+
+          for filepath in glob.glob(".github/data/*.csv"):
+              print(f"\nProcessing {filepath}")
+              with open(filepath, newline="", encoding="utf-8") as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      issue_id   = row["id"].strip()
+                      title      = row["Title"].strip()
+                      body       = row["Description"].strip()
+                      labels_raw = row["Labels"].strip()
+                      milestone  = row["Milestone"].strip()
+
+
+                      print(f"Checking {issue_id}")
+
+                      if issue_exists(issue_id):
+                          print(f"  Skipping existing: {issue_id}")
+                          continue
+
+                      # Ensure labels exist
+                      labels = [l.strip() for l in labels_raw.split(";") if l.strip()]
+                      for lbl in labels:
+                          ensure_label(lbl)
+
+                      # Ensure milestone exists
+                      milestone_number = ensure_milestone(milestone)
+
+                      # Create issue
+                      print(f"  Creating: {issue_id} {title}")
+                      cmd = [
+                          "issue", "create",
+                          "--title", f"{issue_id} {title}",
+                          "--body", body,
+                          "--milestone", milestone,
+                      ]
+                      for lbl in labels:
+                          cmd += ["--label", lbl]
+                      gh(*cmd)
+
+          EOF
