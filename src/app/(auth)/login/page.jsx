@@ -1,303 +1,167 @@
 "use client";
-import React, { useState } from "react";
-import Link from "next/link";
+
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, loginTOTP, getSocialAuthUrl } from "@/lib/api";
+import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {loginAPI} from "@/lib/api";
 import { useAuth } from "@/lib/AuthContext";
+import AuthShell from "@/components/AuthShell";
 
-export default function SignInPage() {
+const schema = z.object({
+  email: z.string().email("Enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export default function LoginPage() {
   const router = useRouter();
-
-  // step 0 = email + password, step 1 = TOTP (only if user has 2FA enabled)
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ email: "", password: "", otp_token: "" });
+  const { login, isAuthenticated } = useAuth();
+  const [serverError, setServerError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const { login: loginUser } = useAuth();
-  const { setSession } = useAuth();
 
-  const handleChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    setError("");
-  };
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({ resolver: zodResolver(schema) });
 
-  // ── Step 0: email + password ────────────────────────────────────────────
-  const handlePasswordSubmit = async (e) => {
-  e.preventDefault();
-  if (!form.email)    { setError("Email is required"); return; }
-  if (!form.password) { setError("Password is required"); return; }
+  // Already logged-in guard
+  if (isAuthenticated) {
+    router.replace("/dashboard");
+    return null;
+  }
 
+  async function onSubmit(data) {
+  setServerError("");
   setLoading(true);
-  setError("");
-
   try {
-    const res  = await login({ email: form.email, password: form.password });
-    const data = res?.data;
-
-    if (data?.requires_2fa) {
-      // 2FA enabled — don't persist anything yet, move to TOTP step
-      setStep(1);
-      return;
-    }
-
-    // No 2FA — persist session and redirect
-    setSession(data);
-    router.push("/dashboard");
+    // 1. Hit the backend
+    const res = await loginAPI({
+      email: data.email,
+      password: data.password,
+    });
+    console.log(res)
+    // 2. Store tokens in context (res is already the data, not res.data)
+    router.push("/verify-otp");
   } catch (err) {
-    setError(extractError(err));
+    console.log(JSON.stringify(err))
+    const detail =
+      err?.response?.data?.detail ||
+      err?.response?.data?.non_field_errors?.[0] ||
+      "Login failed. Check your credentials.";
+    setServerError(detail);
   } finally {
     setLoading(false);
   }
-};
+}
 
-// ── Step 1: TOTP ──────────────────────────────────────────────────────────────
-const handleTOTPSubmit = async (e) => {
-  e.preventDefault();
-  if (!form.otp_token)              { setError("Please enter the 6-digit code"); return; }
-  if (form.otp_token.length !== 6)  { setError("Code must be exactly 6 digits"); return; }
-
-  setLoading(true);
-  setError("");
-
-  try {
-    const res = await loginTOTP({ email: form.email, otp_token: form.otp_token });
-    setSession(res?.data);
-    router.push("/dashboard");
-  } catch (err) {
-    setError(extractError(err));
-  } finally {
-    setLoading(false);
+  function handleOAuth(provider) {
+    // social-django endpoints
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/social/${provider}/`;
   }
-};
-
-// ── Social login ──────────────────────────────────────────────────────────────
-// Social login redirects away from the page entirely — the OAuth callback
-// handles the session. No changes needed here.
-const handleSocialLogin = (provider) => {
-  window.location.href = getSocialAuthUrl(provider);
-};
-  
 
   return (
-    <div className="min-h-screen flex font-sans">
+    <AuthShell title="Welcome back." subtitle="# sign in to continue">
+      {serverError && <div className="alert alert-error">{serverError}</div>}
 
-      {/* ── Left decorative panel ── */}
-      <div className="hidden lg:flex lg:w-5/12 panel-left pattern-dots flex-col justify-between p-12 relative overflow-hidden">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-emerald-500/20 blur-3xl pointer-events-none" />
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="field">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            autoComplete="email"
+            className={errors.email ? "error-input" : ""}
+            {...register("email")}
+          />
+          {errors.email && (
+            <p className="field-error">⚠ {errors.email.message}</p>
+          )}
+        </div>
 
-        <Link href="/" className="flex items-center gap-3 z-10">
-          <img src="/logo.svg" alt="Python 9ja" className="w-10 h-10 rounded-xl"
-               onError={(e) => { e.target.style.display = "none"; }} />
-          <span className="font-display text-xl text-white">
-            Python<span className="text-emerald-400">9ja</span>
-          </span>
-        </Link>
-
-        <div className="z-10 space-y-6">
-          <div className="text-5xl">🐍</div>
-          <h2 className="font-display text-4xl text-white leading-tight">
-            Welcome back to <br />
-            <span className="text-emerald-400">Nigeria's Python hub</span>
-          </h2>
-          <p className="text-emerald-200/70 text-base leading-relaxed max-w-xs">
-            Connect with thousands of Python developers, find jobs, and stay
-            up-to-date with tech news — all in one place.
-          </p>
-          <div className="flex items-center gap-3 pt-2">
-            <div className="flex -space-x-2">
-              {["🧑🏾‍💻", "👩🏽‍💻", "👨🏿‍💻", "👩🏾‍💻"].map((emoji, i) => (
-                <div key={i} className="w-9 h-9 rounded-full bg-emerald-800 border-2 border-emerald-900 flex items-center justify-center text-sm">
-                  {emoji}
-                </div>
-              ))}
-            </div>
-            <span className="text-emerald-300 text-sm font-medium">2,400+ members waiting</span>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            autoComplete="current-password"
+            className={errors.password ? "error-input" : ""}
+            {...register("password")}
+          />
+          {errors.password && (
+            <p className="field-error">⚠ {errors.password.message}</p>
+          )}
+          <div style={{ textAlign: "right", marginTop: "0.4rem" }}>
+            <Link href="/forgot-password" className="forgot-link">
+              Forgot password?
+            </Link>
           </div>
         </div>
 
-        <p className="text-emerald-200/40 text-xs z-10">
-          © {new Date().getFullYear()} Python 9ja · Made in Nigeria 🇳🇬
-        </p>
+        <button type="submit" className="btn-primary" disabled={loading}>
+          {loading ? <span className="spinner" /> : "Sign In →"}
+        </button>
+      </form>
+
+      <div className="divider">
+        <span>or continue with</span>
       </div>
 
-      {/* ── Right: form panel ── */}
-      <div className="flex-1 flex items-center justify-center bg-white px-6 py-12">
-        <div className="w-full max-w-md fade-up">
-
-          {/* Mobile logo */}
-          <Link href="/" className="flex items-center gap-2 mb-8 lg:hidden">
-            <img src="/logo.svg" alt="Python 9ja" className="w-8 h-8 rounded-lg"
-                 onError={(e) => { e.target.style.display = "none"; }} />
-            <span className="font-display text-lg text-gray-900">
-              Python<span className="text-emerald-600">9ja</span>
-            </span>
-          </Link>
-
-          {/* ── STEP 0: Email + Password ── */}
-          {step === 0 && (
-            <div className="slide-in">
-              <h1 className="font-display text-3xl text-gray-900 mb-1">Sign in</h1>
-              <p className="text-gray-400 text-sm mb-8">
-                Don't have an account?{" "}
-                <Link href="/register" className="text-emerald-600 font-semibold hover:underline">
-                  Create one free
-                </Link>
-              </p>
-
-              {/* Social login */}
-              <div className="flex gap-3 mb-6">
-                <button onClick={() => handleSocialLogin("google-oauth2")}
-                        className="social-btn flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-white">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  Google
-                </button>
-                <button onClick={() => handleSocialLogin("github")}
-                        className="social-btn flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-white">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                  </svg>
-                  GitHub
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex-1 h-px bg-gray-100" />
-                <span className="text-xs text-gray-400 font-medium">or continue with email</span>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>
-
-              {error && <ErrorBox message={error} />}
-
-              <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
-                  <input
-                    type="email" name="email" value={form.email}
-                    onChange={handleChange} placeholder="you@example.com"
-                    className="input-focus w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 bg-gray-50 placeholder-gray-400 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm font-medium text-gray-700">Password</label>
-                    <Link href="/forgot-password"
-                          className="text-xs text-emerald-600 hover:underline font-medium">
-                      Forgot password?
-                    </Link>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPass ? "text" : "password"} name="password" value={form.password}
-                      onChange={handleChange} placeholder="Your password"
-                      className="input-focus w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 bg-gray-50 placeholder-gray-400 pr-11 transition-all"
-                    />
-                    <button type="button" onClick={() => setShowPass((v) => !v)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg">
-                      {showPass ? "🙈" : "👁️"}
-                    </button>
-                  </div>
-                </div>
-
-                <button type="submit" disabled={loading}
-                        className="btn-green w-full py-3.5 rounded-xl text-white font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed">
-                  {loading ? <Spinner label="Signing in…" /> : "Sign In →"}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* ── STEP 1: TOTP (only reached if backend returned requires_2fa=true) ── */}
-          {step === 1 && (
-            <div className="slide-in">
-              <button onClick={() => { setStep(0); setError(""); }}
-                      className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-6 transition-colors">
-                ← Back
-              </button>
-
-              <h1 className="font-display text-3xl text-gray-900 mb-1">Two-factor auth</h1>
-              <p className="text-gray-400 text-sm mb-1">
-                Open your authenticator app and enter the 6-digit code for
-              </p>
-              <p className="text-emerald-600 font-semibold text-sm mb-8">{form.email}</p>
-
-              {error && <ErrorBox message={error} />}
-
-              <form onSubmit={handleTOTPSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">6-digit code</label>
-                  <input
-                    type="text" name="otp_token" value={form.otp_token}
-                    onChange={handleChange}
-                    placeholder="123456" maxLength={6}
-                    inputMode="numeric" pattern="[0-9]*"
-                    className="input-focus w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 bg-gray-50 placeholder-gray-400 tracking-widest text-center text-lg transition-all"
-                  />
-                </div>
-
-                <button type="submit" disabled={loading}
-                        className="btn-green w-full py-3.5 rounded-xl text-white font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed">
-                  {loading ? <Spinner label="Verifying…" /> : "Verify & Sign In →"}
-                </button>
-              </form>
-            </div>
-          )}
-
-          <p className="text-center text-xs text-gray-400 mt-6">
-            By signing in you agree to our{" "}
-            <Link href="/terms" className="text-emerald-600 hover:underline">Terms</Link>{" "}
-            &{" "}
-            <Link href="/privacy" className="text-emerald-600 hover:underline">Privacy Policy</Link>
-          </p>
-        </div>
+      <div className="oauth-row">
+        <button
+          type="button"
+          className="btn-ghost"
+          onClick={() => handleOAuth("google-oauth2")}
+        >
+          <GoogleIcon /> Google
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          onClick={() => handleOAuth("github")}
+        >
+          <GitHubIcon /> GitHub
+        </button>
       </div>
-    </div>
+
+      <p className="auth-footer">
+        No account?{" "}
+        <Link href="/register">Create one</Link>
+      </p>
+
+      <style jsx>{`
+        .forgot-link {
+          font-family: var(--mono);
+          font-size: 0.68rem;
+          color: var(--text-muted);
+          text-decoration: none;
+          transition: color 0.2s;
+        }
+        .forgot-link:hover { color: var(--green); }
+      `}</style>
+    </AuthShell>
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function persistSession(data) {
-  if (!data) return;
-  if (data.access)  localStorage.setItem("access",  data.access);
-  if (data.refresh) localStorage.setItem("refresh", data.refresh);
-  // Store a minimal user object — don't store tokens inside it
-  const { access, refresh, ...user } = data;
-  if (Object.keys(user).length) localStorage.setItem("user", JSON.stringify(user));
-}
-
-function extractError(err) {
-  const res = err?.response?.data;
-  if (!res) return "Network error. Please try again.";
-  const msg =
-    res?.data?.error        ||
-    res?.detail             ||
-    res?.error              ||
-    res?.non_field_errors?.[0] ||
-    Object.values(res)?.[0]?.[0];
-  return typeof msg === "string" ? msg : "Login failed. Please check your credentials.";
-}
-
-function ErrorBox({ message }) {
+function GoogleIcon() {
   return (
-    <div className="error-shake mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-start gap-2">
-      <span className="mt-0.5">⚠️</span>
-      <span>{message}</span>
-    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
   );
 }
 
-function Spinner({ label }) {
+function GitHubIcon() {
   return (
-    <span className="flex items-center justify-center gap-2">
-      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-      {label}
-    </span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+    </svg>
   );
 }

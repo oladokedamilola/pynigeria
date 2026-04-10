@@ -50,7 +50,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="font-sans text-gray-900 bg-white overflow-x-hidden">
+    <div className="font-sans text-gray-900 bg-white overflow-x-hidden ">
 
       {/* ─── HERO ─── */}
       <section className="min-h-screen hero-pattern flex items-center pt-16 sm:pt-8">

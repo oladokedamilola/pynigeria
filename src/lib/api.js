@@ -1,35 +1,96 @@
 import { API_BASE_URL } from "@/constants";
-import axios from "axios";
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
-  withCredentials: true, // sends cookies (needed for CSRF + session auth)
-});
+// ─────────────────────────────────────────────────────────────────────────────
+// CORE FETCH WRAPPER
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── Intercept every request to attach JWT token + CSRF ──────────────────────
-api.interceptors.request.use((config) => {
+/**
+ * Build request headers.
+ * Mirrors the old Axios request interceptor:
+ *   - Always sets Content-Type: application/json (unless overridden)
+ *   - Attaches Bearer token from localStorage if present
+ */
+function buildHeaders(extra = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...extra,
+  };
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("token");
-    if (token) {
-      config.headers["Authorization"] = `Bearer ${token}`;
-    }
+    if (token) headers["Authorization"] = `Bearer ${token}`;
   }
-  return config;
-});
+  return headers;
+}
 
-// ── Intercept responses — auto logout on 401 ────────────────────────────────
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
+/**
+ * Handle 401 globally — mirrors the old Axios response interceptor.
+ * Clears localStorage and redirects to /login.
+ */
+function handle401() {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
   }
-);
+}
+
+/**
+ * Core request function — replaces `axios.create()` + interceptors.
+ *
+ * @param {string} path       - API path e.g. "/authentication/login/"
+ * @param {object} options    - fetch options (method, headers, body, etc.)
+ * @param {"json"|"blob"|"text"} responseType - how to parse the response body
+ * @returns {Promise<{ data: any, status: number, headers: Headers }>}
+ */
+async function request(path, options = {}, responseType = "json") {
+  const url = `${API_BASE_URL}${path}`;
+
+  const res = await fetch(url, {
+    credentials: "include", // replaces withCredentials: true (sends cookies for CSRF + session)
+    ...options,
+    headers: buildHeaders(options.headers),
+  });
+
+  // ── 401 auto-logout ──────────────────────────────────────────────────────
+  if (res.status === 401) {
+    handle401();
+    // Still throw so callers can catch if needed
+    const err = new Error("Unauthorized");
+    err.response = { status: 401, data: null };
+    throw err;
+  }
+
+  // ── Parse body ───────────────────────────────────────────────────────────
+  let data;
+  if (responseType === "blob") {
+    data = await res.blob();
+  } else if (responseType === "text") {
+    data = await res.text();
+  } else {
+    // JSON — guard against empty bodies (e.g. 204 No Content)
+    const text = await res.text();
+    data = text ? JSON.parse(text) : null;
+  }
+
+  // ── Non-2xx → throw in the same shape the old Axios errors had ───────────
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`);
+    err.response = { status: res.status, data };
+    throw err;
+  }
+
+  return { data, status: res.status, headers: res.headers };
+}
+
+// Convenience method shortcuts (mirrors axios instance methods used in this file)
+const api = {
+  get:    (path, options = {})        => request(path, { method: "GET",    ...options }),
+  post:   (path, body, options = {})  => request(path, { method: "POST",   body: JSON.stringify(body), ...options }),
+  put:    (path, body, options = {})  => request(path, { method: "PUT",    body: JSON.stringify(body), ...options }),
+  patch:  (path, body, options = {})  => request(path, { method: "PATCH",  body: JSON.stringify(body), ...options }),
+  delete: (path, options = {})        => request(path, { method: "DELETE", ...options }),
+};
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -37,129 +98,134 @@ api.interceptors.response.use(
 
 /** Fetch CSRF token from Django before mutating requests */
 export const getCsrfToken = async () => {
-  const res  = await api.get("/authentication/csrfToken/");
+  const res = await api.get("/authentication/csrfToken/");
   return res.data.csrfToken;
 };
 
-/** Attach CSRF header to a config object */
-const withCsrf = async (config = {}) => {
+/** Returns a headers object with the CSRF token injected */
+const withCsrf = async (extraHeaders = {}) => {
   const csrfToken = await getCsrfToken();
-  return {
-    ...config,
-    headers: { ...config.headers, "X-CSRFToken": csrfToken },
-  };
+  return { headers: { "X-CSRFToken": csrfToken, ...extraHeaders } };
 };
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AUTH  (/auth/*)
+// AUTH  (/authentication/*)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Register a new user
- * POST /auth/register/
+ * POST /authentication/register/
  * Body: { email, password, first_name, last_name, username }
  */
 export const register = async (data) => {
   const config   = await withCsrf();
-  const response = await api.post("/authentication/register/", data, config);
-  return response.data;
+  const res      = await api.post("/authentication/register/", data, config);
+  return res.data;
 };
 
 /**
  * Log in with email + password
- * POST /auth/login/
+ * POST /authentication/login/
  * Body: { email, password }
  */
-export const login = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/authentication/login/", data, config);
-  return response.data;
+export const loginAPI = async (data) => {
+  const config = await withCsrf();
+  const res    = await api.post("/authentication/login/", data, config);
+  return res.data;
 };
 
 /**
  * Log in with JWT (SimpleJWT token pair)
- * POST /auth/login/ or /jobs/login/
+ * POST /jobs/login/
  * Returns: { access, refresh }
  */
 export const loginJWT = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/jobs/login/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/jobs/login/", data, config);
+  return res.data;
 };
 
 /**
- * TODO: fill in TOTP login
  * Log in with TOTP (email and OTP token)
- * POST /auth/totp-login/
+ * POST /authentication/totp-login/
  * Returns: { access, refresh }
  */
 export const loginTOTP = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/authentication/totp-login/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/authentication/verify-email/complete/", data, config);
+  return res.data;
 };
 
 /**
  * Begin email verification (resend)
- * POST /auth/verify-email/begin/
+ * POST /authentication/verify-email/begin/
  * Body: { email }
  */
 export const verifyEmailBegin = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/authentication/verify-email/begin/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/authentication/verify-email/begin/", data, config);
+  return res.data;
 };
 
 /**
  * Complete email verification via token
- * POST /auth/verify-email/complete/:token/
+ * POST /authentication/verify-email/complete/:token/
  */
 export const verifyEmailComplete = async (token) => {
-  const config   = await withCsrf();
-  const response = await api.post(`/authentication/verify-email/complete/${token}/`, {}, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post(`/authentication/verify-email/complete/?token=${encodeURIComponent(token)}`,{}, config);
+  return res.data;
 };
 
 /**
  * Create a TOTP (2FA) device
- * POST /auth/totp-device/create/
- * Body: { email } or user identifier
+ * POST /authentication/totp-device/create/
  */
 export const createTOTPDevice = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/authentication/totp-device/create/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/authentication/totp-device/create/", data, config);
+  return res.data;
 };
 
 /**
  * Get QR code PNG for 2FA setup
- * POST /auth/totp-device/qrcode/
- * Returns: image/png binary
+ * POST /authentication/totp-device/qrcode/
+ * Returns: Blob — use URL.createObjectURL()
  */
 export const getTOTPQRCode = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/authentication/totp-device/qrcode/", data, {
-    ...config,
-    responseType: "blob",
+  const csrfToken = await getCsrfToken();
+  const url       = `${API_BASE_URL}/authentication/totp-device/qrcode/`;
+
+  const res = await fetch(url, {
+    method:      "POST",
+    credentials: "include",
+    headers:     buildHeaders({ "X-CSRFToken": csrfToken }),
+    body:        JSON.stringify(data),
   });
-  return response.data; // Blob — use URL.createObjectURL()
+
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`);
+    err.response = { status: res.status, data: null };
+    throw err;
+  }
+
+  return res.blob(); // caller: URL.createObjectURL(blob)
 };
 
 /**
  * Verify a TOTP code
- * POST /auth/totp-device/verify/
+ * POST /authentication/totp-device/verify/
  * Body: { token, code }
  */
 export const verifyTOTPDevice = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/authentication/totp-device/verify/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/authentication/totp-device/verify/", data, config);
+  return res.data;
 };
 
 /**
  * Begin social OAuth (Google, GitHub etc.)
- * GET /auth/social/begin/:provider/
  * Redirect — call window.location.href directly
  */
 export const getSocialAuthUrl = (provider) =>
@@ -167,13 +233,13 @@ export const getSocialAuthUrl = (provider) =>
 
 /**
  * Change password
- * POST /auth/password/change/
+ * POST /authentication/password/change/
  * Body: { old_password, new_password }
  */
 export const changePassword = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/authentication/password/change/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/authentication/password/change/", data, config);
+  return res.data;
 };
 
 
@@ -187,8 +253,9 @@ export const changePassword = async (data) => {
  * Params: { search, employment_type, ordering, page }
  */
 export const getJobs = async (params = {}) => {
-  const response = await api.get("/jobs/job/job-list/", { params });
-  return response.data;
+  const query = new URLSearchParams(params).toString();
+  const res   = await api.get(`/jobs/job/job-list/${query ? `?${query}` : ""}`);
+  return res.data;
 };
 
 /**
@@ -196,19 +263,18 @@ export const getJobs = async (params = {}) => {
  * GET /jobs/job/:slug/
  */
 export const getJob = async (slug) => {
-  const response = await api.get(`/jobs/job/${slug}/`);
-  return response.data;
+  const res = await api.get(`/jobs/job/${slug}/`);
+  return res.data;
 };
 
 /**
  * Post a new job
  * POST /jobs/job/
- * Body: { job_title, employment_type, description, tags, job_skills, ... }
  */
 export const createJob = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/jobs/job/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/jobs/job/", data, config);
+  return res.data;
 };
 
 /**
@@ -216,9 +282,9 @@ export const createJob = async (data) => {
  * PUT /jobs/job/:slug/
  */
 export const updateJob = async (slug, data) => {
-  const config   = await withCsrf();
-  const response = await api.put(`/jobs/job/${slug}/`, data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.put(`/jobs/job/${slug}/`, data, config);
+  return res.data;
 };
 
 /**
@@ -226,9 +292,9 @@ export const updateJob = async (slug, data) => {
  * PATCH /jobs/job/:slug/
  */
 export const patchJob = async (slug, data) => {
-  const config   = await withCsrf();
-  const response = await api.patch(`/jobs/job/${slug}/`, data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.patch(`/jobs/job/${slug}/`, data, config);
+  return res.data;
 };
 
 /**
@@ -236,9 +302,9 @@ export const patchJob = async (slug, data) => {
  * DELETE /jobs/job/:slug/
  */
 export const deleteJob = async (slug) => {
-  const config   = await withCsrf();
-  const response = await api.delete(`/jobs/job/${slug}/`, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.delete(`/jobs/job/${slug}/`, config);
+  return res.data;
 };
 
 /**
@@ -247,9 +313,9 @@ export const deleteJob = async (slug) => {
  * Body: { is_approved, message? }
  */
 export const approveJob = async (slug, data) => {
-  const config   = await withCsrf();
-  const response = await api.post(`/jobs/job/approve/${slug}/`, data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post(`/jobs/job/approve/${slug}/`, data, config);
+  return res.data;
 };
 
 
@@ -257,151 +323,117 @@ export const approveJob = async (slug, data) => {
 // BOOKMARKS  (/jobs/bookmark/*)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Get all bookmarks for the logged-in user
- * GET /jobs/bookmark/
- */
 export const getBookmarks = async () => {
-  const response = await api.get("/jobs/bookmark/");
-  return response.data;
+  const res = await api.get("/jobs/bookmark/");
+  return res.data;
 };
 
-/**
- * Create a bookmark
- * POST /jobs/bookmark/
- * Body: { job, folder? }
- */
 export const createBookmark = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/jobs/bookmark/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/jobs/bookmark/", data, config);
+  return res.data;
 };
 
-/**
- * Delete a bookmark
- * DELETE /jobs/bookmark/:id/
- */
 export const deleteBookmark = async (id) => {
-  const config   = await withCsrf();
-  const response = await api.delete(`/jobs/bookmark/${id}/`, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.delete(`/jobs/bookmark/${id}/`, config);
+  return res.data;
 };
 
-/**
- * Get all bookmark folders
- * GET /jobs/bookmark-folders/
- */
 export const getBookmarkFolders = async () => {
-  const response = await api.get("/jobs/bookmark-folders/");
-  return response.data;
+  const res = await api.get("/jobs/bookmark-folders/");
+  return res.data;
 };
 
-/**
- * Create a bookmark folder
- * POST /jobs/bookmark-folders/
- * Body: { name }
- */
 export const createBookmarkFolder = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/jobs/bookmark-folders/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/jobs/bookmark-folders/", data, config);
+  return res.data;
 };
 
-/**
- * Update a bookmark folder
- * PATCH /jobs/bookmark-folders/:id/
- */
 export const updateBookmarkFolder = async (id, data) => {
-  const config   = await withCsrf();
-  const response = await api.patch(`/jobs/bookmark-folders/${id}/`, data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.patch(`/jobs/bookmark-folders/${id}/`, data, config);
+  return res.data;
 };
 
-/**
- * Delete a bookmark folder
- * DELETE /jobs/bookmark-folders/:id/
- */
 export const deleteBookmarkFolder = async (id) => {
-  const config   = await withCsrf();
-  const response = await api.delete(`/jobs/bookmark-folders/${id}/`, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.delete(`/jobs/bookmark-folders/${id}/`, config);
+  return res.data;
 };
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROFILE  (/profile/*)   — wire up when you build the profile API
+// PROFILE  (/profile/*)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Get a public profile by username
- * GET /profile/:username/
- */
 export const getProfile = async (username) => {
-  const response = await api.get(`/profile/${username}/`);
-  return response.data;
+  const res = await api.get(`/profile/${username}/`);
+  return res.data;
 };
 
-/**
- * Update own profile
- * PATCH /profile/update/
- * Body: { first_name, last_name, bio, location, github, twitter, linkedin, website, skills }
- */
 export const updateProfile = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.patch("/profile/update/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.patch("/profile/update/", data, config);
+  return res.data;
 };
 
 /**
  * Upload a profile avatar
- * PATCH /profile/update/  with multipart/form-data
+ * PATCH /profile/update/ with multipart/form-data
+ * Note: Content-Type must NOT be set manually — fetch sets it with the boundary automatically
  */
 export const uploadAvatar = async (file) => {
   const csrfToken = await getCsrfToken();
   const formData  = new FormData();
   formData.append("avatar", file);
-  const response = await api.patch("/profile/update/", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-      "X-CSRFToken":  csrfToken,
-    },
+
+  // Build headers manually — omit Content-Type so fetch can set multipart boundary
+  const headers = {};
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("token");
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+  headers["X-CSRFToken"] = csrfToken;
+
+  const res = await fetch(`${API_BASE_URL}/profile/update/`, {
+    method:      "PATCH",
+    credentials: "include",
+    headers,
+    body:        formData, // fetch handles multipart boundary automatically
   });
-  return response.data;
+
+  if (res.status === 401) { handle401(); return; }
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`);
+    err.response = { status: res.status, data: await res.json().catch(() => null) };
+    throw err;
+  }
+  return res.json();
 };
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RESOURCES  (/resources/*)   — wire up when backend is ready
+// RESOURCES  (/resources/*)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * List all resources (with optional category / search filter)
- * GET /resources/?category=&search=
- */
 export const getResources = async (params = {}) => {
-  const response = await api.get("/resources/", { params });
-  return response.data;
+  const query = new URLSearchParams(params).toString();
+  const res   = await api.get(`/resources/${query ? `?${query}` : ""}`);
+  return res.data;
 };
 
-/**
- * Submit a community resource
- * POST /resources/
- * Body: { title, description, category, file_url, tags }
- */
 export const submitResource = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/resources/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/resources/", data, config);
+  return res.data;
 };
 
-/**
- * Increment download count for a resource
- * POST /resources/:id/download/
- */
 export const trackDownload = async (id) => {
-  const config   = await withCsrf();
-  const response = await api.post(`/resources/${id}/download/`, {}, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post(`/resources/${id}/download/`, {}, config);
+  return res.data;
 };
 
 
@@ -409,67 +441,42 @@ export const trackDownload = async (id) => {
 // WEEKLY CHALLENGES  (/challenges/*)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * List all challenges
- * GET /challenges/
- */
 export const getChallenges = async () => {
-  const response = await api.get("/challenges/");
-  return response.data;
+  const res = await api.get("/challenges/");
+  return res.data;
 };
 
-/**
- * Get a single challenge
- * GET /challenges/:id/
- */
 export const getChallenge = async (id) => {
-  const response = await api.get(`/challenges/${id}/`);
-  return response.data;
+  const res = await api.get(`/challenges/${id}/`);
+  return res.data;
 };
 
-/**
- * Submit a challenge solution
- * POST /challenges/:id/submit/
- * Body: { github_url, notes? }
- */
 export const submitChallenge = async (id, data) => {
-  const config   = await withCsrf();
-  const response = await api.post(`/challenges/${id}/submit/`, data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post(`/challenges/${id}/submit/`, data, config);
+  return res.data;
 };
 
-/**
- * Suggest a new challenge idea
- * POST /challenges/suggest/
- * Body: { title, description, difficulty }
- */
 export const suggestChallenge = async (data) => {
-  const config   = await withCsrf();
-  const response = await api.post("/challenges/suggest/", data, config);
-  return response.data;
+  const config = await withCsrf();
+  const res    = await api.post("/challenges/suggest/", data, config);
+  return res.data;
 };
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TECH NEWS  (/news/*)   — wire up when backend is ready
+// TECH NEWS  (/news/*)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * List news articles (paginated)
- * GET /news/?page=&category=
- */
 export const getNews = async (params = {}) => {
-  const response = await api.get("/news/", { params });
-  return response.data;
+  const query = new URLSearchParams(params).toString();
+  const res   = await api.get(`/news/${query ? `?${query}` : ""}`);
+  return res.data;
 };
 
-/**
- * Get a single news article
- * GET /news/:slug/
- */
 export const getNewsArticle = async (slug) => {
-  const response = await api.get(`/news/${slug}/`);
-  return response.data;
+  const res = await api.get(`/news/${slug}/`);
+  return res.data;
 };
 
 

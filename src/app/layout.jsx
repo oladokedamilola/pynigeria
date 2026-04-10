@@ -3,7 +3,7 @@ import "../styles/bootstrap-5/css/bootstrap.css";
 import "../styles/fontawesome/css/all.min.css";
 import "../styles/animate.min.css";
 import "./globals.css";
-import Nav from "../components/layout/nav.js";
+import Nav from "@/components/layout/nav.js";
 import Link from "next/link";
 import { AuthProvider } from "@/lib/AuthContext"
 

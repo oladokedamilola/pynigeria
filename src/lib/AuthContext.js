@@ -26,6 +26,11 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const login = ()=>{
+    setSession(data)
+    setUser(data.user)
+  }
+
   const logout = () => {
     clearSession()
     setUser(null)
@@ -33,7 +38,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, isLoggedIn: !!user, setSession, logout }}>
+    <AuthContext.Provider value={{ user, loading, isLoggedIn: !!user, setSession, logout , login }}>
       {children}
     </AuthContext.Provider>
   )
