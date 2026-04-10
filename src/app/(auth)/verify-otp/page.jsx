@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {loginTOTP} from "@/lib/api";
+import {loginTOTP,VerifyEmailBegin} from "@/lib/api";
 import { useAuth } from "@/lib/AuthContext";
 import AuthShell from "@/components/AuthShell";
 
@@ -11,7 +11,7 @@ const RESEND_COOLDOWN = 60;
 
 export default function VerifyEmailPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login,setUser } = useAuth();
 
   const [digits, setDigits] = useState(Array(OTP_LENGTH).fill(""));
   const [error, setError] = useState("");
@@ -67,7 +67,9 @@ export default function VerifyEmailPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await loginTOTP(otp);
+      const email = localStorage.getItem("email")
+      print(email)
+      const res = await loginTOTP({otp:otp,email:email});
       // Backend may return tokens on verification
       if (res?.access) await login(res);
       router.push("/dashboard");
@@ -91,7 +93,7 @@ export default function VerifyEmailPage() {
     setResendLoading(true);
     setError("");
     try {
-      await api.post("/auth/resend-otp/");
+      await VerifyEmailBegin(data);
       setSuccess("A new OTP has been sent to your email.");
       setCooldown(RESEND_COOLDOWN);
       setTimeout(() => setSuccess(""), 4000);

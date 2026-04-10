@@ -17,7 +17,7 @@ const schema = z.object({
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isAuthenticated } = useAuth();
+  const { setSession, isAuthenticated } = useAuth();
   const [serverError, setServerError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -42,7 +42,7 @@ export default function LoginPage() {
       email: data.email,
       password: data.password,
     });
-    console.log(res)
+    setSession({email:data.email})
     // 2. Store tokens in context (res is already the data, not res.data)
     router.push("/verify-otp");
   } catch (err) {
