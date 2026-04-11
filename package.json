@@ -12,7 +12,7 @@
     "@hookform/resolvers": "^5.2.2",
     "axios": "^1.6.8",
     "framer-motion": "^11.13.1",
-    "next": "^14.2.29",
+    "next": "^15.5.7",
     "package.json": "^0.0.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
