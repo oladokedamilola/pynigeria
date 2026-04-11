@@ -152,6 +152,7 @@ export const loginJWT = async (data) => {
  * Returns: { access, refresh }
  */
 export const loginTOTP = async (data) => {
+  console.log(data)
   const config = await withCsrf();
   const res    = await api.post("/authentication/verify-email/complete/", data, config);
   return res.data;

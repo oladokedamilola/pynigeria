@@ -42,7 +42,7 @@ export default function LoginPage() {
       email: data.email,
       password: data.password,
     });
-    setSession({email:data.email})
+    localStorage.setItem("pending_email", data.email);
     // 2. Store tokens in context (res is already the data, not res.data)
     router.push("/verify-otp");
   } catch (err) {

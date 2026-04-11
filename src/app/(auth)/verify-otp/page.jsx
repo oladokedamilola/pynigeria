@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {loginTOTP,VerifyEmailBegin} from "@/lib/api";
+import {loginTOTP,verifyEmailBegin} from "@/lib/api";
 import { useAuth } from "@/lib/AuthContext";
 import AuthShell from "@/components/AuthShell";
 
@@ -67,11 +67,13 @@ export default function VerifyEmailPage() {
     setError("");
     setLoading(true);
     try {
-      const email = localStorage.getItem("email")
-      print(email)
-      const res = await loginTOTP({otp:otp,email:email});
-      // Backend may return tokens on verification
-      if (res?.access) await login(res);
+      const email = localStorage.getItem("pending_email")
+      const res = await loginTOTP({ otp_code: otp, email: email });
+      const data = res?.data || res; // handles both wrapped and unwrapped
+      if (data?.access) {
+        login(data);
+      }
+      localStorage.removeItem("pending_email");
       router.push("/dashboard");
     } catch (err) {
       const detail = err?.response?.data?.detail || err?.response?.data?.otp?.[0];
@@ -93,7 +95,8 @@ export default function VerifyEmailPage() {
     setResendLoading(true);
     setError("");
     try {
-      await VerifyEmailBegin(data);
+      const email = localStorage.getItem("pending_email")
+      await verifyEmailBegin({email:email});
       setSuccess("A new OTP has been sent to your email.");
       setCooldown(RESEND_COOLDOWN);
       setTimeout(() => setSuccess(""), 4000);
