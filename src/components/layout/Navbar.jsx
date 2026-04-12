@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/lib/AuthContext";
 import Avatar from "@/components/ui/Avatar";
+import C from "@/styles/colors"
 
 const NAV_LINKS = [
   { label: "Home", href: "/" },
@@ -14,149 +15,88 @@ const NAV_LINKS = [
   { label: "Community", href: "/community" },
 ];
 
+// Pages where the nav should be completely hidden
+const HIDDEN_PATHS = ["/register", "/login"];
+
+const ms = (name, extra = {}) => (
+  <span className="material-symbols-outlined" style={{ fontSize: 20, verticalAlign: "middle", ...extra }}>{name}</span>
+);
+
 export default function Navbar() {
-  const pathname = usePathname();
+  const path = usePathname();
   const { user, isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const router    = useRouter();
+
+  if (HIDDEN_PATHS.includes(path)) return null;
 
   return (
-    <header className="bg-background sticky top-0 z-50 border-b border-outline-variant/20">
-      <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-
-        {/* Logo */}
-        <Link href="/" className="text-2xl font-black tracking-[-0.04em] text-primary font-headline uppercase">
-          PYTHON9JA
-        </Link>
-
-        {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center space-x-8 font-label font-bold tracking-tighter uppercase text-xs">
-          {NAV_LINKS.map(({ label, href }) => {
-            const isActive = pathname === href || (href !== "/" && pathname.startsWith(href));
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`px-2 py-1 transition-all duration-75 ${
-                  isActive
-                    ? "text-primary border-b-2 border-primary"
-                    : "text-secondary opacity-70 hover:text-primary hover:bg-surface-variant"
-                }`}
-              >
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Right Side */}
-        <div className="hidden md:flex items-center space-x-4">
-          {isAuthenticated ? (
-            <>
-              {/* Notification Bell */}
-              <button className="text-primary hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined">notifications</span>
+     <nav style={{
+        position: "fixed", top: 0, width: "100%", zIndex: 50,
+        background: "rgba(14,14,14,0.85)", backdropFilter: "blur(20px)",
+        borderBottom: `1px solid rgba(73,72,71,0.2)`,
+        boxShadow: "0 0 20px rgba(142,255,113,0.05)"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "1rem 1.5rem", maxWidth: 1440, margin: "0 auto" }}>
+          <div className="font-headline" style={{ fontSize: "1.5rem", fontWeight: 900, color: C.primary, letterSpacing: "-0.04em", textTransform: "uppercase" }}>
+            <div className="flex items-center gap-2 mb-3">
+               <img
+              src="/logo.svg"
+              alt="Python 9ja"
+              className="w-8 h-8 rounded-lg"
+            />
+              <span className="font-display font-bold text-lg text-white">
+                Python<span className="text-green-400">9ja</span>
+              </span>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "2rem" }} className="font-headline nav-desktop-links">
+            {NAV_LINKS.map((item, i) => (
+              <a key={item} href={item.href} className={i === 0 ? "nav-link-active font-headline" : "nav-link font-headline"}
+                style={{ fontSize: "0.8rem", fontWeight: 600, letterSpacing: "-0.02em", textTransform: "uppercase" }}>
+                {item.label}
+              </a>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div className="nav-search-box" style={{ display: "flex", alignItems: "center", background: C.surfaceLowest, border: `1px solid rgba(73,72,71,0.2)`, padding: "0.3rem 0.75rem" }}>
+              {ms("search", { fontSize: 14, color: C.primary, marginRight: 8 })}
+              <input
+                style={{ background: "transparent", border: "none", outline: "none", fontSize: "0.6rem", width: 128, fontFamily: "JetBrains Mono, monospace", color: C.outline, textTransform: "uppercase" }}
+                placeholder="CMD + K TO SEARCH"
+              />
+            </div>
+            {isAuthenticated ? <Avatar name={user.username} />
+             : <Link href="/login" className="nav-login-btn">
+              <button className="login-btn font-headline" style={{ padding: "0.5rem 1.5rem", fontWeight: 700, fontSize: "0.875rem", border: "none", cursor: "pointer" }}>
+                LOGIN
               </button>
+            </Link>
+            }
 
-              {/* Dashboard Link */}
-              <Link
-                href="/dashboard"
-                className="font-label font-bold text-xs uppercase tracking-widest text-secondary hover:text-primary transition-colors"
-              >
-                Dashboard
-              </Link>
-
-              {/* Avatar */}
-              <Link href={`/profile/${user?.id}`}>
-                <Avatar src={user?.avatar} alt={user?.username} size="sm" />
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="font-label font-bold text-xs uppercase tracking-widest text-secondary hover:text-primary transition-colors px-2 py-1"
-              >
-                Login
-              </Link>
-              <Link
-                href="/register"
-                className="bg-primary text-on-primary px-6 py-2 font-label font-bold tracking-widest text-xs hover:shadow-[0_0_15px_rgba(142,255,113,0.5)] transition-all"
-              >
-                Register
-              </Link>
-            </>
-          )}
-        </div>
-
-        {/* Mobile Hamburger */}
-        <button
-          className="md:hidden text-primary"
-          onClick={() => setMenuOpen((prev) => !prev)}
-          aria-label="Toggle menu"
-        >
-          <span className="material-symbols-outlined">
-            {menuOpen ? "close" : "menu"}
-          </span>
-        </button>
-      </div>
-
-      {/* Mobile Menu */}
-      {menuOpen && (
-        <div className="md:hidden bg-surface-container-low border-t border-outline-variant/20 px-6 py-6 flex flex-col space-y-4">
-          {NAV_LINKS.map(({ label, href }) => {
-            const isActive = pathname === href || (href !== "/" && pathname.startsWith(href));
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setMenuOpen(false)}
-                className={`font-label font-bold text-xs uppercase tracking-widest py-2 border-b border-outline-variant/10 ${
-                  isActive ? "text-primary" : "text-secondary opacity-70"
-                }`}
-              >
-                {label}
-              </Link>
-            );
-          })}
-
-          <div className="pt-4 flex flex-col space-y-3">
-            {isAuthenticated ? (
-              <>
-                <Link
-                  href="/dashboard"
-                  onClick={() => setMenuOpen(false)}
-                  className="font-label font-bold text-xs uppercase tracking-widest text-secondary hover:text-primary"
-                >
-                  Dashboard
-                </Link>
-                <div className="flex items-center space-x-3">
-                  <Avatar src={user?.avatar} alt={user?.username} size="sm" />
-                  <span className="font-label text-xs font-bold uppercase text-secondary">
-                    {user?.username}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  onClick={() => setMenuOpen(false)}
-                  className="font-label font-bold text-xs uppercase tracking-widest text-secondary hover:text-primary py-2"
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/register"
-                  onClick={() => setMenuOpen(false)}
-                  className="bg-primary text-on-primary px-6 py-3 font-label font-bold tracking-widest text-xs text-center"
-                >
-                  Register
-                </Link>
-              </>
-            )}
+            <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
+              <span style={{ transform: menuOpen ? "rotate(45deg) translate(5px, 5px)" : "none" }} />
+              <span style={{ opacity: menuOpen ? 0 : 1 }} />
+              <span style={{ transform: menuOpen ? "rotate(-45deg) translate(5px, -5px)" : "none" }} />
+            </button>
           </div>
         </div>
-      )}
-    </header>
+        {/* Mobile menu */}
+        <div className={`nav-mobile-menu${menuOpen ? " open" : ""}`}>
+          {NAV_LINKS.map((item, i) => (
+            <a key={item} href={item.href} className={i === 0 ? "nav-link-active" : "nav-link"} onClick={() => setMenuOpen(false)}>
+              {item.label}
+            </a>
+          ))}
+          {isAuthenticated ? <Avatar/> 
+          : <Link href="/login" style={{ paddingTop: "1rem" }}>
+            <button className="login-btn font-headline" style={{ width: "100%", padding: "0.75rem", fontWeight: 700, fontSize: "0.875rem", border: "none", cursor: "pointer", textTransform: "uppercase" }}>
+              LOGIN
+            </button>
+          </Link>}
+
+        </div>
+      </nav>
+
   );
 }

@@ -12,7 +12,7 @@ const SIZE_MAP = {
  * @param {string} [props.alt]
  * @param {"sm"|"md"|"lg"} [props.size]
  */
-export default function Avatar({ src, alt = "", size = "md" }) {
+export default function Avatar({ src, name, alt = "", size = "md" }) {
   const { container, text, px } = SIZE_MAP[size] ?? SIZE_MAP.md;
 
   // Derive initials from alt (username or full name)
@@ -33,7 +33,7 @@ export default function Avatar({ src, alt = "", size = "md" }) {
           width={px}
           height={px}
           className="w-full h-full object-cover"
-        />
+        /> {name}
       </div>
     );
   }

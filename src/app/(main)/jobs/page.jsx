@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { API_BASE_URL } from "@/constants";
+import {getJobs} from "@/lib/api"
 
 const EMPLOYMENT_TYPES = ["Full-time", "Part-time", "Contract", "Freelance", "Internship", "Remote"];
 const SORT_OPTIONS = [
@@ -113,12 +114,9 @@ export default function JobsPage() {
       if (ordering) params.set("ordering", ordering);
       params.set("page", page);
 
-      const res = await fetch(`${API_BASE_URL}/api/jobs/job/job-list/?${params}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to load jobs");
-      const data = await res.json();
-
+      const res = await getJobs(params)
+      const data = res;
+      console.log(data)
       // Handle both paginated and plain array responses
       if (Array.isArray(data)) {
         setJobs(data);
@@ -175,6 +173,8 @@ export default function JobsPage() {
       `}</style>
 
       {/* ── Hero Banner ── */}
+      <br />
+      <br />
       <div className="green-gradient py-14 px-4">
         <div className="max-w-4xl mx-auto text-center fade-up">
           <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-1.5 text-white/90 text-sm font-medium mb-4">
@@ -379,7 +379,7 @@ export default function JobsPage() {
       {/* ── Footer ── */}
       <footer className="border-t border-gray-100 bg-white mt-12 py-8">
         <div className="max-w-6xl mx-auto px-4 text-center text-sm text-gray-400">
-          © {new Date().getFullYear()} Python 8ja · <Link href="/" className="text-emerald-600 hover:underline">Back to home</Link>
+         <Link href="/" className="text-emerald-600 hover:underline">Back to home</Link>
         </div>
       </footer>
     </div>
