@@ -255,7 +255,7 @@ export const changePassword = async (data) => {
  */
 export const getJobs = async (params = {}) => {
   const query = new URLSearchParams(params).toString();
-  const res   = await api.get(`/job/job/job-list/${query ? `?${query}` : ""}`);
+  const res   = await api.get(`/jobs/job/job-list/${query ? `?${query}` : ""}`);
   return res.data;
 };
 
