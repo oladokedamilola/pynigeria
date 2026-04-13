@@ -98,9 +98,9 @@ export default function Home() {
       {/* Scanline overlay */}
       <div className="fixed inset-0 scanline z-[100] opacity-20 pointer-events-none" />
    
-      <main style={{ paddingTop: "1rem" }}>
+      <main style={{ paddingTop: "3rem" }}>
         {/* ── HERO ── */}
-        <section style={{ minHeight: 900, display: "flex", alignItems: "center", padding: "2rem 1.5rem", maxWidth: 1440, margin: "0 auto" }}>
+        <section style={{ minHeight: 800, display: "flex", alignItems: "center", padding: "2rem 1.5rem", maxWidth: 1440, margin: "0 auto" }}>
           <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3rem", alignItems: "flex-start", width: "100%" }}>
 
             {/* Left */}
