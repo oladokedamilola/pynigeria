@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import api from "@/lib/api";
+import {registerAPI} from "@/lib/api";
 import { useAuth } from "@/lib/AuthContext";
 import AuthShell from "@/components/AuthShell";
 
@@ -51,7 +51,7 @@ export default function RegisterPage() {
     setServerError("");
     setLoading(true);
     try {
-      await api.post("/authentication/register/", {
+      await registerAPI({
         username: data.username,
         email: data.email,
         password: data.password,
@@ -61,7 +61,6 @@ export default function RegisterPage() {
     } catch (err) {
       const errData = err?.response?.data;
       if (errData) {
-        // Flatten first field error from DRF validation response
         const first = Object.values(errData)[0];
         setServerError(Array.isArray(first) ? first[0] : String(first));
       } else {
@@ -73,11 +72,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthShell
-      title="Join Python 9ja."
-      subtitle="# create your account"
-    >
-      {serverError && <div className="alert alert-error">{serverError}</div>}
+    <AuthShell title="Join Python 9ja." subtitle="# create your account">
+      {serverError && (
+        <div className="alert alert-error">{serverError}</div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="field">
@@ -93,6 +91,7 @@ export default function RegisterPage() {
           {errors.username && (
             <p className="field-error">⚠ {errors.username.message}</p>
           )}
+          <p className="field-hint">Letters, numbers, and underscores only</p>
         </div>
 
         <div className="field">
@@ -115,7 +114,7 @@ export default function RegisterPage() {
           <input
             id="password"
             type="password"
-            placeholder="Min 8 chars, 1 uppercase, 1 number"
+            placeholder="Min 8 chars · 1 uppercase · 1 number"
             autoComplete="new-password"
             className={errors.password ? "error-input" : ""}
             {...register("password")}
@@ -149,6 +148,16 @@ export default function RegisterPage() {
         Already have an account?{" "}
         <Link href="/login">Sign in</Link>
       </p>
+
+      <style jsx>{`
+        .field-hint {
+          font-family: var(--mono);
+          font-size: 0.65rem;
+          color: var(--text-muted);
+          margin-top: 0.35rem;
+          opacity: 0.7;
+        }
+      `}</style>
     </AuthShell>
   );
 }

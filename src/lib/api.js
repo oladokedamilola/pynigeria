@@ -118,7 +118,7 @@ const withCsrf = async (extraHeaders = {}) => {
  * POST /authentication/register/
  * Body: { email, password, first_name, last_name, username }
  */
-export const register = async (data) => {
+export const registerAPI = async (data) => {
   const config   = await withCsrf();
   const res      = await api.post("/authentication/register/", data, config);
   return res.data;
@@ -255,7 +255,7 @@ export const changePassword = async (data) => {
  */
 export const getJobs = async (params = {}) => {
   const query = new URLSearchParams(params).toString();
-  const res   = await api.get(`/jobs/job/job-list/${query ? `?${query}` : ""}`);
+  const res   = await api.get(`/jobs/job/${query ? `?${query}` : ""}`);
   return res.data;
 };
 
@@ -368,6 +368,11 @@ export const deleteBookmarkFolder = async (id) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PROFILE  (/profile/*)
 // ─────────────────────────────────────────────────────────────────────────────
+
+export const getAllProfile = async () => {
+  const res = await api.get(`/users/`);
+  return res.data;
+};
 
 export const getProfile = async (username) => {
   const res = await api.get(`/profile/${username}/`);

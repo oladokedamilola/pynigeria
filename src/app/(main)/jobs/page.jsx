@@ -633,7 +633,7 @@ export default function JobsPage() {
               <div className={`grid gap-4 ${viewMode === "grid" ? "sm:grid-cols-2" : "grid-cols-1"}`}>
                 {jobs.map((job, i) => (
                   <div key={job.slug || i} style={{ animationDelay: `${i * 0.04}s` }}>
-                    <DarkJobCard job={job} bookmarked={bookmarks.has(job.slug)} onBookmark={toggleBookmark} listMode={viewMode === "list"} />
+                    <JobCard job={job} bookmarked={bookmarks.has(job.slug)} onBookmark={toggleBookmark} listMode={viewMode === "list"} />
                   </div>
                 ))}
               </div>

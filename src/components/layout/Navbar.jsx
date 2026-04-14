@@ -13,7 +13,7 @@ const NAV_LINKS = [
   { label: "Events", href: "/events" },
   { label: "Resources", href: "/resources" },
   { label: "Community", href: "/community" },
-  { label: "Profile", href: "/profile" },
+  { label: "Developers", href: "/profile" },
 ];
 
 // Pages where the nav should be completely hidden
